@@ -1,18 +1,18 @@
-import json
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from app.utils.file_parse import extract_text
 from app.services.openai_client import run_llm
 from app.schemas.resume import ResumeReviewResponse
+import json
 
 router = APIRouter(tags=["resume"])
 
 SYSTEM = (
     "Ты карьерный ассистент. Отвечай по-русски. "
     "Верни ТОЛЬКО валидный JSON. "
-    "Никакого текста вне JSON. Никаких markdown и ```."
+    "Никакого текста вне JSON. Никаких markdown и ```. ```."
 )
 
-@router.post("/review", response_model=ResumeReviewResponse)
+@router.post("/analyze-resume")   # ← изменили путь с /review
 async def resume_review(
     file: UploadFile = File(...),
     target_role: str | None = Form(None),
@@ -55,21 +55,26 @@ summary: строка
     try:
         out = run_llm(prompt, system=SYSTEM, temperature=0.2)
 
-        # 🔥 Защита от мусора вокруг JSON (очень важно)
         start = out.find("{")
         end = out.rfind("}")
-
         if start != -1 and end != -1:
             out = out[start:end + 1]
 
-        return json.loads(out)
+        raw = json.loads(out)
+
+        # Адаптируем под ожидаемую фронтом структуру
+        return {
+            "analysis": {
+                "overall_score": int(raw.get("score", 65)),
+                "structure_score": int(raw.get("score", 65) * 0.9),   # имитация
+                "experience_score": int(raw.get("score", 65) * 0.95),
+                "skills_score": int(raw.get("score", 65) * 0.92),
+                "grammar_score": int(raw.get("score", 65) * 0.98),
+                "recommendations": raw.get("improved_bullets", [])[:6],
+                "strengths": raw.get("strengths", []),
+                "weaknesses": raw.get("issues", []),
+            }
+        }
 
     except Exception as e:
-        return {
-            "score": 60,
-            "strengths": [],
-            "issues": [f"LLM/parse error: {type(e).__name__}"],
-            "improved_bullets": [],
-            "keywords": [],
-            "summary": "Ошибка обработки ответа модели",
-        }
+        raise HTTPException(status_code=500, detail=f"Resume analysis failed: {str(e)}")

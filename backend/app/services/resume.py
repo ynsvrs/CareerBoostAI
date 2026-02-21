@@ -10,18 +10,21 @@ def review_resume(resume_text: str, target_role: str | None = None) -> dict:
     )
 
     prompt = f"""
-Analyze this resume and give actionable feedback.
+You are reviewing a resume for a job seeker.
 {role_line}
 
-Return JSON with EXACT keys:
-score (0-100 int),
-strengths (list of strings),
-issues (list of strings),
-improved_bullets (list of strings),
-keywords (list of strings),
-summary (string, 2-3 sentences).
+Carefully analyze the resume and provide:
+- score: overall quality score 0-100
+- strengths: what is done well (3-5 points)
+- issues: specific problems to fix (3-5 points)
+- improved_bullets: rewrite weak bullet points to be stronger and more quantified
+- keywords: important ATS keywords missing from the resume
+- summary: brief overall assessment in 2-3 sentences
 
-Resume text:
+Be specific and actionable. Focus on measurable improvements.
+Return ONLY valid JSON with EXACT keys: score, strengths, issues, improved_bullets, keywords, summary.
+
+Resume:
 {resume_text}
 """.strip()
 

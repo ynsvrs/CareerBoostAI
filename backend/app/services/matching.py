@@ -50,7 +50,10 @@ def recommend_internships(
     internships: Optional[List[InternshipItem]],
     top_k: int = 5,
 ) -> MatchingResponse:
-    jobs = internships or MOCK_INTERNSHIPS
+    from app.services.internship_ai_engine import get_ai_internships
+
+    jobs = get_ai_internships(role=target_role,internships=internships
+)
     if not jobs:
         return MatchingResponse(results=[])
 
@@ -72,17 +75,24 @@ def recommend_internships(
         })
 
     prompt = f"""
-Твоя задача: подобрать наиболее подходящие стажировки.
+Ты опытный карьерный консультант. Твоя задача — найти наиболее подходящие стажировки для кандидата.
 
-Данные кандидата:
-- target_role: {target_role}
-- skills: {user_skills}
-- resume_text (может быть пусто): {resume_text or ""}
+Профиль кандидата:
+- Желаемая роль: {target_role}
+- Навыки: {user_skills}
+- Резюме: {resume_text or "не указано"}
 
-Список стажировок (JSON):
+Доступные стажировки:
 {jobs_payload}
 
-Верни СТРОГО JSON формата:
+Оцени каждую стажировку и выбери топ {top_k} наиболее подходящих.
+
+Критерии оценки:
+- Совпадение навыков кандидата с требованиями
+- Соответствие желаемой роли
+- Потенциал для роста
+
+Верни СТРОГО JSON:
 {{
   "results": [
     {{
@@ -91,17 +101,17 @@ def recommend_internships(
       "company": "string",
       "url": "string or null",
       "match_score": 0-100,
-      "why_match": ["string", ...],
-      "missing_skills": ["string", ...]
+      "why_match": ["причина 1", "причина 2"],
+      "missing_skills": ["навык 1", "навык 2"]
     }}
   ]
 }}
 
 Правила:
-- Верни ровно top_k={top_k} результатов (если вакансий меньше — верни сколько есть).
-- why_match: 2-4 пункта.
-- missing_skills: 0-6 пунктов.
-- match_score: целое 0-100.
+- Ровно {top_k} результатов, отсортированных по match_score (от высокого к низкому)
+- why_match: 2-4 конкретные причины почему подходит
+- missing_skills: чего не хватает кандидату для этой позиции
+- match_score: целое число 0-100
 """
 
     out = run_llm(prompt, system=SYSTEM, temperature=0.2)

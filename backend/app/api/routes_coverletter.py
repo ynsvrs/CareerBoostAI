@@ -1,4 +1,5 @@
 import json
+import re
 from fastapi import APIRouter, HTTPException
 from app.schemas.coverletter import CoverLetterRequest, CoverLetterResponse
 from app.services.openai_client import run_llm
@@ -7,17 +8,22 @@ router = APIRouter(prefix="/api/cover-letter", tags=["cover-letter"])
 
 SYSTEM = (
     "Ты карьерный ассистент. Отвечай по-русски. "
-    "Верни строго валидный JSON без markdown и без лишнего текста."
+    "Верни ТОЛЬКО валидный JSON без markdown, без ``` и без текста вне JSON."
 )
 
-@router.post("", response_model=CoverLetterResponse)
-def generate_cover_letter(payload: CoverLetterRequest):
-    prompt = f"""
-Сгенерируй сопроводительное письмо и короткое письмо для email.
 
-Верни СТРОГО JSON (только JSON, без ``` и без текста вокруг) с ключами:
-- letter (string) — полноценное сопроводительное письмо
-- short_email (string) — короткий текст для email (3-6 предложений)
+@router.post("/generate", response_model=CoverLetterResponse)
+def generate_cover_letter(payload: CoverLetterRequest):
+
+    prompt = f"""
+Сгенерируй сопроводительное письмо и короткий email вариант.
+
+Верни ТОЛЬКО JSON:
+
+{{
+  "letter": "полное сопроводительное письмо",
+  "short_email": "короткое письмо (3-6 предложений)"
+}}
 
 Тон: {payload.tone}
 Должность: {payload.job_title}
@@ -32,17 +38,38 @@ def generate_cover_letter(payload: CoverLetterRequest):
 
     try:
         out = run_llm(prompt, system=SYSTEM, temperature=0.4)
-        data = json.loads(out)
 
-        # минимальная страховка: если модель вернула не те ключи
-        if "letter" not in data or "short_email" not in data:
-            raise ValueError("Missing keys in LLM JSON")
+        data = _safe_json_parse(out)
+
+        # Проверка обязательных полей
+        if not isinstance(data.get("letter"), str):
+            raise ValueError("Invalid letter field")
+        if not isinstance(data.get("short_email"), str):
+            raise ValueError("Invalid short_email field")
 
         return data
 
     except Exception as e:
-        # чтобы Swagger не падал 500, но было понятно, что пошло не так
         raise HTTPException(
             status_code=500,
-            detail=f"Cover letter generation failed: {type(e).__name__}"
+            detail=f"Cover letter generation failed: {str(e)}"
         )
+
+
+# -----------------------------
+# SAFE JSON PARSER ⭐
+# -----------------------------
+
+def _safe_json_parse(text: str):
+    """Safely extract JSON from LLM response"""
+
+    try:
+        return json.loads(text)
+    except:
+
+        # Try extracting JSON block
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            return json.loads(match.group())
+
+        raise ValueError("LLM returned invalid JSON")
