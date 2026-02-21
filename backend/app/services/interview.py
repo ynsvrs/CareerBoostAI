@@ -1,29 +1,30 @@
 import uuid
 from typing import Dict, List, Any, Optional
-
 from app.services.openai_client import run_llm
 
-# Простое in-memory хранилище (на защиту/демо норм)
 _SESSIONS: Dict[str, Dict[str, Any]] = {}
 
 SYSTEM = (
-    "Ты интервьюер по найму. Отвечай по-русски. "
-    "Дай: 1) краткий фидбек на ответ, 2) оценку 0-100, 3) следующий вопрос. "
-    "Не используй markdown."
+    "Ты интервьюер по найму. "
+    "Отвечай по-русски. "
+    "Верни: FEEDBACK, SCORE, NEXT_QUESTION."
 )
 
-def start_interview(role: str, level: str = "intern", focus: Optional[str] = None) -> Dict[str, str]:
+
+def start_interview(role: str, level: str = "intern", focus: Optional[str] = None):
+
     session_id = str(uuid.uuid4())
 
-    # Первый вопрос задаем сразу (без JSON, просто текст вопроса)
-    focus_part = f"Фокус: {focus}." if focus else "Фокус не задан."
-    prompt = (
-        f"Начни собеседование на позицию: {role}\n"
-        f"Уровень кандидата: {level}\n"
-        f"{focus_part}\n\n"
-        f"Задай первый вопрос — начни с чего-то простого, например про опыт или мотивацию. "
-        f"Только сам вопрос, одна строка, без вступления."
-    )
+    prompt = f"""
+Начни интервью.
+
+Роль: {role}
+Уровень: {level}
+Фокус: {focus or "общий"}
+
+Задай первый вопрос (1 строка).
+"""
+
     first_question = run_llm(prompt, system=SYSTEM, temperature=0.3).strip()
 
     _SESSIONS[session_id] = {
@@ -36,81 +37,84 @@ def start_interview(role: str, level: str = "intern", focus: Optional[str] = Non
         "last_score": 0,
     }
 
-    return {"session_id": session_id, "first_question": first_question}
+    return {
+        "session_id": session_id,
+        "first_question": first_question
+    }
 
 
-def interview_turn(session_id: str, answer: str) -> Dict[str, Any]:
+def interview_turn(session_id: str, answer: str):
+
     if session_id not in _SESSIONS:
-        raise KeyError("Unknown session_id")
+        raise KeyError("Unknown session")
 
     s = _SESSIONS[session_id]
     history: List[Dict[str, str]] = s["history"]
 
-    # Добавляем ответ пользователя
     history.append({"role": "user", "content": answer})
 
-    # Просим модель выдать строго 3 секции, чтобы не ломалось
-    prompt = (
-        f"Ты проводишь профессиональное собеседование.\n"
-        f"Роль: {s['role']}, уровень: {s['level']}, фокус: {s['focus'] or 'общий'}\n\n"
-        f"Оцени последний ответ кандидата и задай следующий вопрос.\n\n"
-        f"СТРОГО используй этот формат:\n"
-        f"FEEDBACK: конкретный фидбек 2-4 предложения — что хорошо, что улучшить\n"
-        f"SCORE: число от 0 до 100\n"
-        f"NEXT_QUESTION: следующий вопрос, логически связанный с предыдущим ответом\n"
+    prompt = f"""
+Ты проводишь интервью.
+
+Роль: {s['role']}
+Уровень: {s['level']}
+Фокус: {s['focus'] or 'общий'}
+
+СТРОГО формат:
+
+FEEDBACK: ...
+SCORE: число 0-100
+NEXT_QUESTION: ...
+"""
+
+    context = "\n".join(
+        f"{m['role']}: {m['content']}"
+        for m in history[-10:]
     )
 
-    # Важно: run_llm у вас принимает system + temperature,
-    # а историю мы "склеим" как контекст вручную (быстро и надежно).
-    # Можно улучшить позже, но для защиты ок.
-    context = ""
-    for m in history[-10:]:  # последние 10 сообщений, чтобы не раздувать
-        prefix = "Вопрос" if m["role"] == "assistant" else "Ответ"
-        context += f"{prefix}: {m['content']}\n"
-
     out = run_llm(
-        f"Контекст:\n{context}\n\n{prompt}",
+        f"{context}\n\n{prompt}",
         system=SYSTEM,
         temperature=0.2
     ).strip()
 
-    feedback, score, next_q = _parse_interview_output(out)
+    feedback, score, next_q = _parse_output(out)
 
-    # Сохраняем следующий вопрос в историю
     history.append({"role": "assistant", "content": next_q})
     s["last_score"] = score
 
     return {
         "next_question": next_q,
         "feedback": feedback,
-        "score": score,
+        "score": score
     }
 
 
-def _parse_interview_output(text: str) -> tuple[str, int, str]:
-    # Очень простой парсер под наш формат
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+def _parse_output(text: str):
+
     feedback = ""
     score = 0
     next_q = ""
 
-    for ln in lines:
-        if ln.upper().startswith("FEEDBACK:"):
-            feedback = ln.split(":", 1)[1].strip()
-        elif ln.upper().startswith("SCORE:"):
-            raw = ln.split(":", 1)[1].strip()
-            try:
-                score = int("".join(ch for ch in raw if ch.isdigit()))
-            except Exception:
-                score = 0
-        elif ln.upper().startswith("NEXT_QUESTION:"):
-            next_q = ln.split(":", 1)[1].strip()
+    for line in text.splitlines():
+        line = line.strip()
 
-    # Фолбэки чтобы никогда не падать
+        if line.upper().startswith("FEEDBACK"):
+            feedback = line.split(":", 1)[1].strip()
+
+        elif line.upper().startswith("SCORE"):
+            digits = "".join(ch for ch in line if ch.isdigit())
+            score = int(digits) if digits else 0
+
+        elif line.upper().startswith("NEXT_QUESTION"):
+            next_q = line.split(":", 1)[1].strip()
+
     if not feedback:
-        feedback = "Фидбек не распознан. Ответ принят."
+        feedback = "Фидбек не распознан."
+
     if not next_q:
-        next_q = "Расскажите подробнее о вашем опыте и проектах по этой роли."
+        next_q = "Расскажите больше о вашем опыте."
+
     score = max(0, min(100, score))
 
     return feedback, score, next_q
