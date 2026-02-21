@@ -17,12 +17,12 @@ function Dashboard() {
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Табы */}
-      <div className="flex space-x-2 mb-8 border-b">
+      <div className="flex flex-wrap space-x-2 mb-8 border-b overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-6 py-3 font-medium ${
+            className={`px-6 py-3 font-medium whitespace-nowrap transition ${
               activeTab === tab.id
                 ? 'border-b-2 border-blue-600 text-blue-600'
                 : 'text-gray-600 hover:text-gray-800'
