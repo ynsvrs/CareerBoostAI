@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { startInterview, evaluateAnswer } from '../utils/api';
 import LoadingSpinner from './LoadingSpinner';
+import VoiceInput from './VoiceInput';
 
 function InterviewSimulator() {
   const [position, setPosition] = useState('');
@@ -144,12 +145,11 @@ function InterviewSimulator() {
 
       {!feedback ? (
         <>
-          <textarea
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            placeholder="Введите ваш ответ..."
-            className="w-full p-4 border rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 min-h-[150px]"
-          />
+          <VoiceInput
+  value={answer}
+  onChange={setAnswer}
+  placeholder="Введите ваш ответ или нажмите на микрофон..."
+/>
 
           <button
             onClick={handleSubmitAnswer}
