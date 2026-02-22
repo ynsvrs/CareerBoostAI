@@ -7,6 +7,7 @@ function JobMatcher() {
   const [keywords, setKeywords] = useState('');
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const handleSearch = async () => {
     if (!keywords.trim() || !resumeText.trim()) {
@@ -15,127 +16,136 @@ function JobMatcher() {
     }
 
     setLoading(true);
+    setHasSearched(false);
     try {
       const result = await matchJobs(resumeText, keywords);
-      setJobs(result.jobs);
+      if (result && Array.isArray(result.jobs)) {
+        setJobs(result.jobs);
+      } else {
+        setJobs([]);
+      }
+      setHasSearched(true);
     } catch (err) {
       console.error(err);
-      alert('Ошибка при поиске вакансий');
+      alert('Ошибка при поиске');
     } finally {
       setLoading(false);
     }
   };
 
   const getMatchColor = (percentage) => {
-    if (percentage >= 80) return 'bg-green-500 shadow-green-200 dark:shadow-green-900/20';
-    if (percentage >= 60) return 'bg-yellow-500 shadow-yellow-200 dark:shadow-yellow-900/20';
-    return 'bg-red-500 shadow-red-200 dark:shadow-red-900/20';
+    if (percentage >= 80) return 'bg-green-500';
+    if (percentage >= 60) return 'bg-yellow-500';
+    return 'bg-red-500';
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-4 transition-colors duration-300">
-      {/* Заголовок */}
-      <div className="mb-8">
-        <h2 className="text-4xl font-black mb-3 text-gray-900 dark:text-white">
-          Умный подбор вакансий
+    <div className="max-w-4xl mx-auto p-5 transition-colors duration-300">
+      {/* Заголовок — теперь аккуратный text-2xl/3xl вместо 5xl */}
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+          Подбор вакансий <span className="text-blue-600">AI</span>
         </h2>
-        <p className="text-gray-600 dark:text-gray-400 text-lg">
-          AI проанализирует ваше резюме и найдет идеальное совпадение по ключевым словам.
+        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">
+          Найдите идеальное совпадение по вашему опыту и навыкам.
         </p>
       </div>
 
-      {/* Форма ввода */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-10 transition-all">
-        <div className="space-y-6">
+      {/* Форма ввода — уменьшил падинги и текст */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-700 mb-8">
+        <div className="space-y-5">
           <div>
-            <label className="block mb-2 text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-              Текст вашего резюме
+            <label className="block mb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              Текст резюме
             </label>
             <textarea
               value={resumeText}
               onChange={(e) => setResumeText(e.target.value)}
-              placeholder="Вставьте опыт работы и ключевые навыки..."
-              className="w-full p-4 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all min-h-[150px]"
+              placeholder="Опыт, навыки..."
+              className="w-full p-3 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all min-h-[120px] text-sm"
             />
           </div>
 
           <div>
-            <label className="block mb-2 text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-              Ключевые слова
+            <label className="block mb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              Должность / Ключевые слова
             </label>
             <input
               type="text"
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
-              placeholder="Например: Frontend Developer, React, Node.js"
-              className="w-full p-4 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              placeholder="Например: Python Developer"
+              className="w-full p-3 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
             />
           </div>
 
           <button
             onClick={handleSearch}
             disabled={loading}
-            className="w-full bg-blue-600 dark:bg-blue-500 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-700 dark:hover:bg-blue-400 disabled:bg-gray-300 dark:disabled:bg-gray-700 transition-all shadow-lg active:scale-[0.98]"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold text-base transition-all active:scale-[0.98] disabled:bg-slate-300"
           >
-            {loading ? 'ИИ ищет лучшие варианты...' : 'Найти подходящие вакансии ✨'}
+            {loading ? '🔍 Поиск...' : 'Найти вакансии'}
           </button>
         </div>
       </div>
 
-      {loading && <LoadingSpinner />}
+      {loading && (
+        <div className="flex flex-col items-center py-6">
+          <LoadingSpinner />
+          <p className="mt-2 text-slate-400 text-[10px] font-bold uppercase tracking-widest">Анализируем базу...</p>
+        </div>
+      )}
 
-      {/* Результаты */}
+      {hasSearched && jobs.length === 0 && !loading && (
+        <div className="text-center p-10 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+          <p className="text-slate-500 text-sm">Ничего не найдено. Попробуйте изменить запрос.</p>
+        </div>
+      )}
+
+      {/* Результаты — Компактные карточки */}
       {jobs.length > 0 && !loading && (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h3 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white flex items-center">
-            <span className="mr-3">🎯</span> Найдено вариантов: {jobs.length}
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white px-1">
+            Найдено вариантов: {jobs.length}
           </h3>
 
-          <div className="grid gap-6">
+          <div className="grid gap-4">
             {jobs.map((job, index) => (
               <div 
                 key={index} 
-                className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-6 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group"
+                className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all group"
               >
-                <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                <div className="flex justify-between items-start gap-4">
                   <div className="flex-1">
-                    <h4 className="text-xl font-bold text-blue-600 dark:text-blue-400 mb-1 group-hover:text-blue-500 transition-colors">
+                    <h4 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">
                       {job.name}
                     </h4>
-                    <p className="text-gray-800 dark:text-gray-200 font-medium mb-3">{job.company}</p>
+                    <p className="text-blue-600 text-sm font-semibold">{job.company}</p>
                     
-                    {/* Причина совпадения */}
                     {job.match && (
-                      <div className="mt-4 bg-blue-50 dark:bg-blue-900/30 p-4 rounded-xl border border-blue-100 dark:border-blue-800/50">
-                        <p className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-2">Почему AI рекомендует:</p>
-                        <p className="text-sm text-blue-700 dark:text-blue-200 leading-relaxed">
-                          {job.match.reason}
+                      <div className="mt-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+                        <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed italic">
+                          "{job.match.reason}"
                         </p>
                       </div>
                     )}
                   </div>
                   
-                  {/* Процент */}
                   {job.match && (
-                    <div className="flex flex-col items-center min-w-[100px]">
-                      <div className={`${getMatchColor(job.match.match_percentage)} text-white px-4 py-3 rounded-2xl font-black text-xl shadow-lg`}>
+                    <div className="flex flex-col items-center min-w-[70px]">
+                      <div className={`${getMatchColor(job.match.match_percentage)} text-white w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm shadow-sm`}>
                         {job.match.match_percentage}%
                       </div>
-                      <span className="text-[10px] mt-2 text-gray-400 uppercase font-bold tracking-tighter">Совпадение</span>
+                      <span className="text-[8px] mt-2 text-slate-400 uppercase font-bold">Match</span>
                     </div>
                   )}
                 </div>
 
-                {/* Недостающие навыки */}
                 {job.match?.missing_skills?.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase mb-2">Стоит изучить для этой вакансии:</p>
+                  <div className="mt-4 pt-4 border-t border-slate-50 dark:border-slate-700">
                     <div className="flex flex-wrap gap-2">
                       {job.match.missing_skills.map((skill, i) => (
-                        <span 
-                          key={i} 
-                          className="bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 px-3 py-1 rounded-full text-xs font-semibold border border-orange-200 dark:border-orange-800"
-                        >
+                        <span key={i} className="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 px-2 py-1 rounded-lg text-[10px] font-bold border border-orange-100 dark:border-orange-800/30">
                           {skill}
                         </span>
                       ))}
@@ -143,15 +153,14 @@ function JobMatcher() {
                   </div>
                 )}
 
-                {/* Ссылка */}
                 {job.url && (
                   <a
                     href={job.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center mt-6 text-blue-600 dark:text-blue-400 font-bold hover:gap-2 transition-all"
+                    className="inline-block mt-4 text-xs font-bold text-slate-900 dark:text-white hover:text-blue-600 underline transition-colors"
                   >
-                    Перейти к вакансии <span className="ml-1 transition-all">→</span>
+                    Подробнее →
                   </a>
                 )}
               </div>
