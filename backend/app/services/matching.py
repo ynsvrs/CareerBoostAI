@@ -52,8 +52,8 @@ def recommend_internships(
 ) -> MatchingResponse:
     from app.services.internship_ai_engine import get_ai_internships
 
-    jobs = get_ai_internships(role=target_role,internships=internships
-)
+    # Попробуй убрать именованный аргумент или проверь правильное имя
+    jobs = get_ai_internships(internships=internships)
     if not jobs:
         return MatchingResponse(results=[])
 
@@ -62,16 +62,23 @@ def recommend_internships(
 
     # Сжимаем вакансии, чтобы не улететь в токены
     jobs_payload = []
-    for j in jobs[:50]:  # на всякий случай ограничение
+    # Если get_ai_internships возвращает словарь, пробуем достать из него список
+    actual_jobs = jobs.get("internships", []) if isinstance(jobs, dict) else jobs
+    
+    for j in actual_jobs[:50]:
+        # Универсальный способ достать данные и из объекта, и из словаря
+        def get_field(obj, key):
+            return obj.get(key) if isinstance(obj, dict) else getattr(obj, key, "")
+
         jobs_payload.append({
-            "id": j.id,
-            "title": j.title,
-            "company": j.company,
-            "location": j.location,
-            "url": j.url,
-            "requirements": j.requirements or [],
-            "skills": j.skills or [],
-            "description": (j.description or "")[:600],
+            "id": get_field(j, "id"),
+            "title": get_field(j, "title"),
+            "company": get_field(j, "company"),
+            "location": get_field(j, "location"),
+            "url": get_field(j, "url"),
+            "requirements": get_field(j, "requirements") or [],
+            "skills": get_field(j, "skills") or [],
+            "description": str(get_field(j, "description") or "")[:600],
         })
 
     prompt = f"""
@@ -114,15 +121,18 @@ def recommend_internships(
 - match_score: целое число 0-100
 """
 
+    # Вызываем ИИ
     out = run_llm(prompt, system=SYSTEM, temperature=0.2)
 
-    # Валидируем строгой схемой
-    resp = parse_llm_to_model(out, MatchingResponse)
+    # ИСПРАВЛЕНИЕ: Если пришел словарь — используем, если строка — парсим
+    if isinstance(out, dict):
+        data = out
+    else:
+        import json
+        import re
+        match = re.search(r"\{.*\}", str(out), re.DOTALL)
+        data = json.loads(match.group()) if match else {}
 
-    # Нормализуем score диапазон
-    for r in resp.results:
-        r.match_score = max(0, min(100, int(r.match_score)))
-
-    # Подрежем до top_k на всякий случай
-    resp.results = resp.results[:top_k]
-    return resp
+    # Создаем объект ответа для фронтенда
+    # Убеждаемся, что передаем список в ключе 'results'
+    return MatchingResponse(results=data.get("results", []))

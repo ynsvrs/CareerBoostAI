@@ -12,14 +12,14 @@ def run_llm(
     system: str,
     temperature: float = 0.2,
     json_mode: bool = True
-) -> str:
+):
     """
     Production-safe LLM caller
     """
 
-    # 🔥 Security protection (prompt injection cleanup)
+    # 🔐 Prompt injection cleanup
     prompt = re.sub(
-        r"(ignore previous|developer mode|system prompt)",
+        r"(ignore previous instructions|developer mode|system prompt)",
         "",
         prompt,
         flags=re.IGNORECASE
@@ -30,46 +30,48 @@ def run_llm(
     system = system[:2000]
 
     try:
-        resp = client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[
+        params = {
+            "model": settings.OPENAI_MODEL,
+            "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": prompt}
             ],
+            "temperature": temperature,
+            "max_tokens": 800
+        }
 
-            temperature=temperature,
-            timeout=30,
+        if json_mode:
+            params["response_format"] = {"type": "json_object"}
 
-            # ⭐ IMPORTANT — structured output
-            response_format={"type": "json_object"} if json_mode else None,
-
-            # Limit output size
-            max_tokens=800
-        )
+        resp = client.chat.completions.create(**params)
 
         text = resp.choices[0].message.content or ""
 
-        # If JSON mode → validate
         if json_mode:
             try:
-                json.loads(text)
-                return text
-            except:
-
-                # fallback JSON extraction
+                return json.loads(text)
+            except json.JSONDecodeError:
+                # fallback extraction
                 start = text.find("{")
                 end = text.rfind("}")
-
                 if start != -1 and end != -1:
-                    return text[start:end + 1]
+                    return json.loads(text[start:end + 1])
 
-                raise ValueError("Invalid LLM JSON response")
+                return {
+                    "error": "invalid_json_from_llm",
+                    "raw": text
+                }
 
         return text
 
     except Exception as e:
-        # Safe fallback instead of crashing production
-        return json.dumps({
+        return {
             "error": "llm_call_failed",
             "message": str(e)
-        })
+        }
+def get_openai_client():
+    """
+    Возвращает инициализированный объект клиента OpenAI.
+    Используется там, где нужен прямой доступ к методам SDK.
+    """
+    return client

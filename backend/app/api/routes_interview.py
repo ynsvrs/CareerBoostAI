@@ -40,15 +40,18 @@ def interview_start(payload: InterviewStartRequest):
 
         out = run_llm(prompt, system=system, temperature=0.7)
 
+        # Здесь была ошибка: передаем 'out' в парсер
         data = _safe_json_parse(out)
 
         # Добавляем id для фронта
-        for i, q in enumerate(data.get("questions", []), 1):
-            q["id"] = i
+        if data and "questions" in data:
+            for i, q in enumerate(data.get("questions", []), 1):
+                q["id"] = i
 
         return data
 
     except Exception as e:
+        print(f"!!! Error in interview_start: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Interview start failed: {str(e)}"
@@ -93,6 +96,7 @@ async def interview_evaluate(
         return data
 
     except Exception as e:
+        print(f"!!! Error in evaluate: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Evaluation failed: {str(e)}"
@@ -120,19 +124,25 @@ def interview_turn_endpoint(payload: InterviewTurnRequest):
 
 
 # -----------------------------
-# SAFE JSON PARSER ⭐ IMPORTANT
+# SAFE JSON PARSER ⭐ ИСПРАВЛЕННЫЙ
 # -----------------------------
 
-def _safe_json_parse(text: str):
+def _safe_json_parse(text):
     """Safely extract JSON from LLM response"""
+    
+    # ЕСЛИ ПРИШЕЛ СЛОВАРЬ — просто возвращаем его (фикс ошибки 'got dict')
+    if isinstance(text, dict):
+        return text
 
     try:
         return json.loads(text)
     except:
+        # Пытаемся вырезать JSON из строки, если там есть лишний текст
+        try:
+            match = re.search(r"\{.*\}", str(text), re.DOTALL)
+            if match:
+                return json.loads(match.group())
+        except:
+            pass
 
-        # Try extracting JSON block using regex
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if match:
-            return json.loads(match.group())
-
-        raise ValueError("LLM returned invalid JSON")
+        raise ValueError(f"LLM returned invalid JSON format. Received: {type(text)}")
