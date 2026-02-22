@@ -5,7 +5,7 @@ const Typewriter = ({ text, speed = 20 }) => {
 
   useEffect(() => {
     let i = 0;
-    setDisplayedText(""); // Очищаем при получении нового текста
+    setDisplayedText("");
     
     const timer = setInterval(() => {
       if (i < text.length) {
